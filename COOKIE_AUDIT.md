@@ -30,7 +30,7 @@ Questi comportamenti sono verificati dal codice, non ancora con DevTools Network
 
 ## Stato del banner/CMP
 
-Non si usa un cookie banner generale perché nel codice non esistono analytics/advertising/marketing. Il controllo è contestuale alla mappa: presenta descrizione, accetta, rifiuta, personalizza, gestisci/revoca e link alle policy. Consenso e rifiuto sono scelte reali e la mappa non è necessaria per navigare/ordinare. Resta da verificare accessibilità effettiva con tastiera e screen reader nei browser target.
+Il banner iniziale è limitato alla preferenza Google Maps: accetta, rifiuta e personalizza sono scelte disponibili al primo accesso; il rifiuto non limita sito o ordini. Il banner non carica provider autonomamente: l’accettazione salva la scelta, mentre la mappa viene richiesta soltanto quando l’utente attiva il controllo contestuale “Consenti e carica la mappa”. Resta da verificare accessibilità effettiva con tastiera e screen reader nei browser target.
 
 ## Checklist live ancora necessaria
 

@@ -19,14 +19,16 @@ Non sono presenti nel repository cookie impostati da script del sito, pixel, ana
 
 La chiave locale memorizza anche il rifiuto per ricordare che non si deve caricare la mappa. Il record non viene inviato al server dal codice. Il pulsante footer “Gestisci preferenze cookie” consente di aggiornare o revocare la scelta; la revoca rimuove l’iframe già creato e il successivo stato di consenso è impostato su `false`.
 
-## Gestione della scelta
+## Banner iniziale e gestione della scelta
+
+Alla prima visita, se non è ancora registrata una decisione valida, il banner mostra scelte separate ed equivalenti: **Accetta** (abilita il caricamento facoltativo di Google Maps), **Rifiuta** e **Personalizza** (apre le preferenze). Nessuna mappa viene caricata dal solo banner; il consenso consente il caricamento dell’iframe Maps e non attiva strumenti di analytics o marketing, che il sito non integra.
 
 - **Consenti mappa**: registra la preferenza e solo allora crea l’iframe Google.
 - **Rifiuta mappa**: registra il rifiuto e mantiene la mappa bloccata; il sito resta utilizzabile.
 - **Personalizza/modifica**: nel dialog si può selezionare o deselezionare l’unica categoria presente (servizio esterno Google Maps).
 - **Revoca**: footer → “Gestisci preferenze cookie” → “Rifiuta e revoca il consenso”. Il frame viene rimosso.
 
-Non esistono categorie analytics o marketing, quindi non è previsto un banner generalista che suggerisca tracking non utilizzato. La scelta è presentata nell’area della mappa con alternative testuali di consenso e rifiuto, e non è condizione per usare il sito.
+Non esistono categorie analytics o marketing. Il banner iniziale riguarda esclusivamente la scelta opzionale di Google Maps e non condiziona la navigazione o l’ordine.
 
 ## Limiti e verifiche richieste
 

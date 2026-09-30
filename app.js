@@ -62,6 +62,16 @@ function saveMapConsent(googleMaps) {
     localStorage.setItem(MAP_CONSENT_KEY, JSON.stringify({ version: MAP_CONSENT_VERSION, savedAt: Date.now(), googleMaps }));
   } catch (_) { /* If storage is unavailable, the current explicit choice still applies for this page view. */ }
   applyMapConsent(googleMaps);
+  document.querySelector('#consent-banner').hidden = true;
+}
+function showConsentBannerIfNeeded() {
+  document.querySelector('#consent-banner').hidden = getMapConsent() !== null;
+}
+function chooseAllOptionalCookies() {
+  saveMapConsent(true);
+}
+function rejectOptionalCookies() {
+  saveMapConsent(false);
 }
 function applyMapConsent(googleMaps) {
   const frame = document.querySelector('#google-map-frame');
@@ -104,6 +114,9 @@ function setupPrivacyControls() {
     if (!dialog.open) dialog.showModal();
   };
   document.querySelector('#manage-privacy').addEventListener('click', openPreferences);
+  document.querySelector('#accept-all-cookies').addEventListener('click', chooseAllOptionalCookies);
+  document.querySelector('#reject-optional-cookies').addEventListener('click', rejectOptionalCookies);
+  document.querySelector('#customize-cookies').addEventListener('click', openPreferences);
   document.querySelector('#load-map').addEventListener('click', () => { saveMapConsent(true); dialog.close(); });
   document.querySelector('#reject-map').addEventListener('click', () => { saveMapConsent(false); dialog.close(); });
   form.addEventListener('submit', event => {
@@ -117,6 +130,7 @@ function setupPrivacyControls() {
   });
   document.querySelector('#close-privacy-dialog').addEventListener('click', () => dialog.close());
   dialog.addEventListener('click', event => { if (event.target === dialog) dialog.close(); });
+  showConsentBannerIfNeeded();
 }
 function fixedMenu(id) { return menuData.fixedMenus.find(item => item.id === id); }
 function findItem(id) { return menuData.items.find(item => item.id === id); }
@@ -130,7 +144,10 @@ function addRevealTargets() { document.querySelectorAll('#home .intro,#home .fix
 function observeRevealTargets() {
   addRevealTargets(); document.documentElement.classList.add('motion-ready');
   const targets = document.querySelectorAll('.reveal-up:not(.is-visible)');
-  if (!('IntersectionObserver' in window)) { targets.forEach(target => target.classList.add('is-visible')); return; }
+  if (!('IntersectionObserver' in window) || window.matchMedia('(max-width: 800px), (prefers-reduced-motion: reduce)').matches) {
+    document.querySelectorAll('.reveal-up').forEach(target => target.classList.add('is-visible'));
+    return;
+  }
   const observer = new IntersectionObserver(entries => entries.forEach(entry => { if (entry.isIntersecting) { entry.target.classList.add('is-visible'); observer.unobserve(entry.target); } }), { threshold: .08, rootMargin: '0px 0px -35px 0px' });
   targets.forEach(target => observer.observe(target));
 }
@@ -150,7 +167,7 @@ function renderMenu() {
   const dishes = menuData.categories.map(category => { const items=menuData.items.filter(item=>item.categoria===category.id); return `<section class="menu-category" id="${esc(category.id)}" data-section="${esc(category.id)}"><div class="category-heading"><h2>${esc(category.nome)}</h2><span>${items.length} specialità</span></div><div class="dish-list">${items.map(item=>renderDish(item,'menu')).join('')}</div></section>`; }).join('');
   document.querySelector('#menu-content').innerHTML = fixed + dishes;
   if (!('IntersectionObserver' in window)) return;
-  const observer = new IntersectionObserver(entries => { const visible=entries.filter(entry=>entry.isIntersecting).sort((a,b)=>b.intersectionRatio-a.intersectionRatio)[0]; if(!visible)return; document.querySelectorAll('.menu-tab').forEach(tab=>{const active=tab.dataset.scrollCategory===visible.target.id;tab.classList.toggle('active',active);tab.setAttribute('aria-selected',String(active));if(active)tab.scrollIntoView({block:'nearest',inline:'center'});}); }, {rootMargin:'-180px 0px -62% 0px',threshold:[0,.1,.3]});
+  const observer = new IntersectionObserver(entries => { const visible=entries.filter(entry=>entry.isIntersecting).sort((a,b)=>b.intersectionRatio-a.intersectionRatio)[0]; if(!visible)return; document.querySelectorAll('.menu-tab').forEach(tab=>{const active=tab.dataset.scrollCategory===visible.target.id;tab.classList.toggle('active',active);tab.setAttribute('aria-selected',String(active));if(active&&window.matchMedia('(min-width: 801px)').matches)tab.scrollIntoView({block:'nearest',inline:'center'});}); }, {rootMargin:'-180px 0px -62% 0px',threshold:[0,.1,.3]});
   document.querySelectorAll('#menu-content [data-section]').forEach(section=>observer.observe(section));
 }
 function secondOptions() { return menuData.items.filter(item=>['carne','pesce'].includes(item.categoria)); }
