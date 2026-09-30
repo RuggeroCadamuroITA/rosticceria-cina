@@ -1,5 +1,8 @@
 const PHONE = '393894742589';
-const STORE_KEY = 'rosticceria-cina-order-v1';
+const STORE_KEY = 'rosticceria-cina-order-v1'; // Legacy key purged to remove old saved order/customer details.
+const MAP_CONSENT_KEY = 'rosticceria-cina-google-maps-consent-v1';
+const MAP_CONSENT_VERSION = 1;
+const CONSENT_MAX_AGE = 183 * 24 * 60 * 60 * 1000;
 const euro = cents => `€ ${(cents / 100).toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 const esc = value => String(value).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 
@@ -24,18 +27,97 @@ async function initializeSite() {
       return;
     }
   }
+  clearLegacyOrderStorage();
   loadState();
+  setupPrivacyControls();
   renderAll();
+  restoreMapIfConsented();
   setupNavigation();
   setupEvents();
   observeRevealTargets();
   setRoute(location.hash.slice(1) || 'home', false);
 }
-function loadState() {
-  try { const saved = JSON.parse(localStorage.getItem(STORE_KEY)); if (saved && Array.isArray(saved.lines)) state = { ...state, ...saved, lines: saved.lines.filter(line => line && Number.isInteger(line.qty) && line.qty > 0) }; }
-  catch (_) { localStorage.removeItem(STORE_KEY); }
+function clearLegacyOrderStorage() {
+  // Earlier versions persisted optional name and notes in localStorage; purge that snapshot on upgrade.
+  try { localStorage.removeItem(STORE_KEY); } catch (_) { /* storage unavailable */ }
+  try { sessionStorage.removeItem(STORE_KEY); } catch (_) { /* storage unavailable */ }
 }
-function saveState() { try { localStorage.setItem(STORE_KEY, JSON.stringify(state)); } catch (_) { /* storage unavailable */ } }
+function loadState() {
+  // Cart, name and notes exist only in memory and are not restored across page loads.
+  state = { lines: [], name: '', notes: '' };
+}
+function saveState() {
+  // Intentionally empty: order data is not written to browser storage.
+}
+function getMapConsent() {
+  try {
+    const consent = JSON.parse(localStorage.getItem(MAP_CONSENT_KEY));
+    if (!consent || consent.version !== MAP_CONSENT_VERSION || typeof consent.googleMaps !== 'boolean' || !Number.isFinite(consent.savedAt)) return null;
+    if (Date.now() - consent.savedAt > CONSENT_MAX_AGE) { localStorage.removeItem(MAP_CONSENT_KEY); return null; }
+    return consent;
+  } catch (_) { return null; }
+}
+function saveMapConsent(googleMaps) {
+  try {
+    localStorage.setItem(MAP_CONSENT_KEY, JSON.stringify({ version: MAP_CONSENT_VERSION, savedAt: Date.now(), googleMaps }));
+  } catch (_) { /* If storage is unavailable, the current explicit choice still applies for this page view. */ }
+  applyMapConsent(googleMaps);
+}
+function applyMapConsent(googleMaps) {
+  const frame = document.querySelector('#google-map-frame');
+  const placeholder = document.querySelector('#map-consent');
+  if (googleMaps) {
+    if (!frame && placeholder) {
+      const iframe = document.createElement('iframe');
+      iframe.className = 'map-frame';
+      iframe.id = 'google-map-frame';
+      iframe.title = 'Mappa Google: Rosticceria Cina, Via Antonio Caccia 93, Udine';
+      iframe.loading = 'lazy';
+      iframe.referrerPolicy = 'no-referrer';
+      iframe.src = 'https://maps.google.com/maps?q=Via%20Antonio%20Caccia%2093%2C%20Udine%2C%20Italy&t=&z=15&ie=UTF8&iwloc=&output=embed';
+      placeholder.replaceWith(iframe);
+    }
+    return;
+  }
+  if (frame) {
+    const map = document.createElement('div');
+    map.className = 'map-frame map-consent';
+    map.id = 'map-consent';
+    map.setAttribute('aria-labelledby', 'map-title');
+    map.innerHTML = '<h2 id="map-title">Mappa interattiva</h2><p>La mappa è fornita da Google Maps. Se scegli di caricarla, Google riceverà dati tecnici come l’indirizzo IP e potrà impostare strumenti propri. Il caricamento è bloccato fino alla tua scelta. Consulta la <a href="privacy.html">Privacy Policy</a> e la <a href="cookie.html">Cookie Policy</a>.</p><div class="map-actions"><button class="button button-outline-red" id="load-map" type="button">Consenti e carica la mappa</button><button class="button button-outline-red" id="reject-map" type="button">Rifiuta e continua senza mappa</button><a class="button button-outline-red" href="https://www.google.com/maps/dir/?api=1&amp;destination=Via+Antonio+Caccia+93%2C+Udine%2C+Italy" target="_blank" rel="noopener noreferrer">Apri indicazioni su Google Maps</a></div>';
+    frame.replaceWith(map);
+    document.querySelector('#load-map')?.addEventListener('click', () => saveMapConsent(true));
+    document.querySelector('#reject-map')?.addEventListener('click', () => saveMapConsent(false));
+  }
+}
+function restoreMapIfConsented() {
+  const consent = getMapConsent();
+  if (consent?.googleMaps) applyMapConsent(true);
+}
+function setupPrivacyControls() {
+  const dialog = document.querySelector('#privacy-preferences');
+  const form = document.querySelector('#privacy-preferences-form');
+  const checkbox = document.querySelector('#consent-google-maps');
+  const openPreferences = () => {
+    const consent = getMapConsent();
+    checkbox.checked = consent?.googleMaps === true;
+    if (!dialog.open) dialog.showModal();
+  };
+  document.querySelector('#manage-privacy').addEventListener('click', openPreferences);
+  document.querySelector('#load-map').addEventListener('click', () => { saveMapConsent(true); dialog.close(); });
+  document.querySelector('#reject-map').addEventListener('click', () => { saveMapConsent(false); dialog.close(); });
+  form.addEventListener('submit', event => {
+    event.preventDefault();
+    saveMapConsent(checkbox.checked);
+    dialog.close();
+  });
+  document.querySelector('#revoke-google-maps').addEventListener('click', () => {
+    saveMapConsent(false);
+    dialog.close();
+  });
+  document.querySelector('#close-privacy-dialog').addEventListener('click', () => dialog.close());
+  dialog.addEventListener('click', event => { if (event.target === dialog) dialog.close(); });
+}
 function fixedMenu(id) { return menuData.fixedMenus.find(item => item.id === id); }
 function findItem(id) { return menuData.items.find(item => item.id === id); }
 function lineKey(line) { return line.type === 'fixed' ? `fixed:${line.uid}` : `dish:${line.id}`; }
@@ -111,7 +193,7 @@ function setupEvents() {
   document.querySelector('#order-content').addEventListener('click',event=>{const quantity=event.target.closest('[data-qty]');if(quantity)setQuantity(quantity.dataset.qty,Number(quantity.dataset.delta));const add=event.target.closest('[data-add-fixed]');if(add&&!add.disabled)addFixed(add.dataset.addFixed,add.closest('[data-fixed-card]'))});
   document.querySelector('#order-content').addEventListener('change',event=>{if(!event.target.matches('[data-fixed-second],[data-fixed-rice]'))return;const card=event.target.closest('[data-fixed-card]'),id=card.dataset.fixedCard;fixedChoices.set(id,{second:card.querySelector(`[data-fixed-second="${id}"]`).value,rice:card.querySelector(`[data-fixed-rice="${id}"]`)?.value||''});refreshFixedStates()});
   document.querySelector('#cart-items').addEventListener('click',event=>{const button=event.target.closest('[data-remove-line]');if(!button)return;state.lines=state.lines.filter(line=>lineKey(line)!==button.dataset.removeLine);saveState();renderOrder();renderCart()});
-  document.querySelector('#customer-name').addEventListener('input',event=>{state.name=event.target.value;saveState()});document.querySelector('#customer-notes').addEventListener('input',event=>{state.notes=event.target.value;saveState()});document.querySelector('#send-order').addEventListener('click',sendOrder);  const panel=document.querySelector('#cart-panel'),overlay=document.querySelector('#cart-overlay'),cartTrigger=document.querySelector('#mobile-cart-bar');
+  document.querySelector('#customer-name').addEventListener('input',event=>{state.name=event.target.value});document.querySelector('#customer-notes').addEventListener('input',event=>{state.notes=event.target.value});document.querySelector('#send-order').addEventListener('click',sendOrder);  const panel=document.querySelector('#cart-panel'),overlay=document.querySelector('#cart-overlay'),cartTrigger=document.querySelector('#mobile-cart-bar');
   let previousFocus=null;
   const close=()=>{if(!panel.classList.contains('open'))return;panel.classList.remove('open');overlay.classList.remove('open');document.body.style.overflow='';(previousFocus||cartTrigger).focus()};
   cartTrigger.addEventListener('click',()=>{previousFocus=document.activeElement;panel.classList.add('open');overlay.classList.add('open');document.body.style.overflow='hidden';document.querySelector('.cart-close').focus()});
@@ -120,5 +202,22 @@ function setupEvents() {
 }
 function filterMenu(query) { const normalized=query.trim().toLocaleLowerCase('it');let count=0;document.querySelectorAll('#menu-content .dish-card').forEach(card=>{const match=!normalized||card.textContent.toLocaleLowerCase('it').includes(normalized);card.hidden=!match;if(match)count++});document.querySelectorAll('#menu-content .menu-category').forEach(section=>{const visible=section.id==='menu-fissi'||[...section.querySelectorAll('.dish-card')].some(card=>!card.hidden);section.hidden=!!normalized&&!visible});let empty=document.querySelector('#menu-content .empty-search');if(normalized&&!count){if(!empty){empty=document.createElement('p');empty.className='empty-search';document.querySelector('#menu-content').append(empty)}empty.textContent=`Nessun piatto trovato per “${query.trim()}”.`}else empty?.remove();const status=document.querySelector('#menu-search-status');if(status)status.textContent=normalized?`${count} ${count===1?'piatto trovato':'piatti trovati'}`:''; }
 function filterOrder(query) { const normalized=query.trim().toLocaleLowerCase('it');document.querySelectorAll('#order-content .order-category').forEach(section=>{const rows=[...section.querySelectorAll('.order-row')];let visible=0;rows.forEach(row=>{const match=!normalized||row.textContent.toLocaleLowerCase('it').includes(normalized);row.hidden=!match;if(match)visible++});section.hidden=!!normalized&&rows.length>0&&!visible;if(section.id==='ordina-fissi')section.hidden=!!normalized}); }
-function sendOrder() { if(!state.lines.length)return;const lines=['Buongiorno, vorrei ordinare:','',...state.lines.map(line=>line.type==='fixed'?`${line.qty}x ${line.label} (${line.detail}) - ${euro(line.price)}`:`${line.qty}x (${line.id}) ${line.name} - ${euro(line.price*line.qty)}`),'',`Totale: ${euro(totalCents())}`];if(state.name.trim())lines.push(`Nome: ${state.name.trim()}`);if(state.notes.trim())lines.push(`Note: ${state.notes.trim()}`);lines.push('','A che ora è possibile ritirare?');window.open(`https://wa.me/${PHONE}?text=${encodeURIComponent(lines.join('\n'))}`,'_blank','noopener'); }
+function sendOrder() {
+  if (!state.lines.length) return;
+  const lines = [
+    'Buongiorno, vorrei ordinare:',
+    '',
+    ...state.lines.map(line => line.type === 'fixed'
+      ? `${line.qty}x ${line.label} (${line.detail}) - ${euro(line.price)}`
+      : `${line.qty}x (${line.id}) ${line.name} - ${euro(line.price * line.qty)}`),
+    '',
+    `Totale: ${euro(totalCents())}`,
+  ];
+  if (state.name.trim()) lines.push(`Nome: ${state.name.trim()}`);
+  if (state.notes.trim()) lines.push(`Note: ${state.notes.trim()}`);
+  lines.push('', 'A che ora è possibile ritirare?');
+  const url = `https://wa.me/${PHONE}?text=${encodeURIComponent(lines.join('\n'))}`;
+  window.open(url, '_blank', 'noopener,noreferrer');
+}
+// Legacy implementation retired: if(!state.lines.length)return;const lines=['Buongiorno, vorrei ordinare:','',...state.lines.map(line=>line.type==='fixed'?`${line.qty}x ${line.label} (${line.detail}) - ${euro(line.price)}`:`${line.qty}x (${line.id}) ${line.name} - ${euro(line.price*line.qty)}`),'',`Totale: ${euro(totalCents())}`];if(state.name.trim())lines.push(`Nome: ${state.name.trim()}`);if(state.notes.trim())lines.push(`Note: ${state.notes.trim()}`);lines.push('','A che ora è possibile ritirare?');window.open(`https://wa.me/${PHONE}?text=${encodeURIComponent(lines.join('\n'))}`,'_blank','noopener'); }
 initializeSite();
